@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Angle Recognition Quiz</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif; background: #f7f9fc; color: #333; text-align: center; padding: 20px;
+    }
+    canvas {
+      margin: 10px auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    #output {
+      background: #fff; margin: 10px auto; padding: 10px; height: 100px; width: 320px;
+      overflow: auto; text-align: left; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .btn {
+      padding: 8px 16px; background: #4a90e2; color: #fff; border: none; border-radius: 4px; cursor: pointer;
+    }
+    .btn:hover { background: #357ab8; }
+    #answer {
+      width: 70px; padding: 8px; text-align: center; border-radius:4px; border:1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Angle Recognition Quiz</h1>
+<canvas id="canvas" width="320" height="320"></canvas>
+<div id="output"></div>
+<button id="start" class="btn">Start</button>
+<input id="answer" type="number" placeholder="Angle°" style="display:none;">
+
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
+  const output=document.getElementById('output'), answerEl=document.getElementById('answer');
+  const startBtn=document.getElementById('start');
+  const remarkable=[0,90,180,270];
+  let questions=[], current, startTime, correctCount=0, total=20;
+
+  const log=msg=>{output.innerText+=msg+'\n';output.scrollTop=output.scrollHeight;};
+
+  const randAngle=()=>Math.floor(Math.random()*72)*5;
+  const getAngle=(a,b)=>Math.min(Math.abs(a-b),360-Math.abs(a-b));
+
+  function nextQuestion(){
+    if(!questions.length)return finishQuiz();
+    current=questions.pop();drawQuestion(current);
+    answerEl.value='';answerEl.style.display='inline-block';answerEl.focus();
+    startTime=performance.now();
+  }
+
+  function drawQuestion({a,b}){
+    const cx=160,cy=160,R=130;
+    ctx.clearRect(0,0,320,320);
+    ctx.strokeStyle='#ccc';ctx.beginPath();ctx.arc(cx,cy,R,0,2*Math.PI);ctx.stroke();
+    [a,b].forEach(angle=>{
+      const rad=angle*Math.PI/180;
+      ctx.strokeStyle='#0055aa';ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+R*Math.cos(rad),cy+R*Math.sin(rad));ctx.stroke();
+    });
+    const {start,span}=getArcParams(a,b);
+    ctx.strokeStyle='magenta';ctx.lineWidth=5;
+    ctx.beginPath();ctx.arc(cx,cy,R-15,start,start+span);ctx.stroke();
+  }
+
+  function drawCorrection({a,b,correct}){
+    const cx=160,cy=160,R=130,rArc=R-15;
+    const {start,span}=getArcParams(a,b);
+    ctx.clearRect(0,0,320,320);
+    ctx.strokeStyle='#ccc';ctx.beginPath();ctx.arc(cx,cy,R,0,2*Math.PI);ctx.stroke();
+    [a,b].forEach(angle=>{
+      const rad=angle*Math.PI/180;
+      ctx.strokeStyle='#0055aa';ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+R*Math.cos(rad),cy+R*Math.sin(rad));ctx.stroke();
+    });
+    let rem=remarkable.reduce((p,c)=>Math.abs(c-correct)<Math.abs(p-correct)?c:p);
+    let diff=correct-rem,remRad=rem*Math.PI/180,diffRad=diff*Math.PI/180;
+    ctx.strokeStyle='#1f77b4';ctx.lineWidth=8;
+    ctx.beginPath();ctx.arc(cx,cy,rArc,start,start+remRad);ctx.stroke();
+    ctx.strokeStyle='#aec7e8';
+    ctx.beginPath();ctx.arc(cx,cy,rArc,start+remRad,start+remRad+diffRad,diff<0);ctx.stroke();
+    ctx.fillStyle='#1f77b4';ctx.font='16px Arial';
+    const midRem=start+remRad/2;
+    ctx.fillText(rem+'°',cx+(rArc-25)*Math.cos(midRem)-10,cy+(rArc-25)*Math.sin(midRem)+5);
+    ctx.fillStyle='#1f77b4';
+    const midDiff=start+remRad+diffRad/2;
+    ctx.fillText((diff>=0?'+':'−')+Math.abs(diff)+'°',cx+(rArc-25)*Math.cos(midDiff)-15,cy+(rArc-25)*Math.sin(midDiff)+5);
+    ctx.fillStyle='black';ctx.font='20px Arial';
+    ctx.fillText('Angle: '+correct+'°',cx-45,cy+60);
+    log(`Angle: ${correct}° → ${rem}° ${diff>=0?'+':'−'} ${Math.abs(diff)}°`);
+  }
+
+  function getArcParams(a,b){
+    const aRad=a*Math.PI/180,bRad=b*Math.PI/180;
+    let delta=(bRad-aRad+2*Math.PI)%(2*Math.PI);
+    return delta<=Math.PI?{start:aRad,span:delta}:{start:bRad,span:2*Math.PI-delta};
+  }
+
+  function generateQuiz(){
+    questions=[];correctCount=0;
+    for(let i=0;i<total;i++){
+      const a=randAngle(),b=(a+randAngle()+10)%360;
+      questions.push({a,b,correct:getAngle(a,b)});
+    }
+    log("Quiz started!");
+    nextQuestion();
+  }
+
+  function finishQuiz(){
+    const score=`Your final score: ${correctCount}/${total}`;
+    log(score);
+    ctx.clearRect(0,0,320,320);
+    ctx.fillStyle='#4a90e2';ctx.font='20px Arial';
+    ctx.fillText(score,70,160);
+    answerEl.style.display='none';startBtn.disabled=false;
+  }
+
+  answerEl.oninput=()=>{
+    const val=answerEl.value.trim();
+    if(!val.match(/^\d+$/))return;
+    if(val.length===current.correct.toString().length){
+      const time=((performance.now()-startTime)/1000).toFixed(2);
+      if(Number(val)===current.correct){
+        log(`✅ Correct (${val}° in ${time}s)`);
+        correctCount++;
+      }else{
+        log(`❌ Wrong (${val}°). Correct: ${current.correct}°`);
+      }
+      drawCorrection(current);
+      setTimeout(nextQuestion,4000);
+    }
+  };
+
+  startBtn.onclick=()=>{
+    output.innerText='';startBtn.disabled=true;generateQuiz();
+  };
+
+});
+</script>
+
+</body>
+</html>
