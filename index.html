@@ -4,141 +4,190 @@
   <meta charset="UTF-8">
   <title>Angle Recognition Quiz</title>
   <style>
-    body {
-      font-family: Arial, sans-serif; background: #f7f9fc; color: #333; text-align: center; padding: 20px;
-    }
-    canvas {
-      margin: 10px auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    #output {
-      background: #fff; margin: 10px auto; padding: 10px; height: 100px; width: 320px;
-      overflow: auto; text-align: left; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .btn {
-      padding: 8px 16px; background: #4a90e2; color: #fff; border: none; border-radius: 4px; cursor: pointer;
-    }
+    body { font-family: Arial, sans-serif; background: #f7f9fc; color: #333; text-align: center; padding: 20px; }
+    canvas { margin: 10px auto; background: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    #output, #feedback { background: #fff; margin: 10px auto; padding: 10px; width: 320px; text-align: left; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    #output { height: 100px; overflow: auto; }
+    #feedback { height: 24px; font-size: 16px; }
+    #questionText { font-size: 18px; margin: 15px; }
+    .btn { padding: 8px 16px; background: #4a90e2; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin: 0 5px; }
     .btn:hover { background: #357ab8; }
-    #answer {
-      width: 70px; padding: 8px; text-align: center; border-radius:4px; border:1px solid #ccc;
-    }
+    #answer { width: 70px; padding: 8px; text-align: center; border-radius:4px; border:1px solid #ccc; }
+    #menu { margin-bottom: 10px; }
   </style>
 </head>
 <body>
+  <h1>Angle Recognition Quiz</h1>
+  <div id="menu">
+    <button id="btnDirected" class="btn">Directed Angle (0–360°)</button>
+    <button id="btnComplement" class="btn">Complement to 360°</button>
+  </div>
+  <canvas id="canvas" width="320" height="320" style="display:none;"></canvas>
+  <div id="questionText" style="display:none;"></div>
+  <div id="feedback" style="display:none;"></div>
+  <div id="output" style="display:none;"></div>
+  <button id="restart" class="btn" style="display:none;">Restart</button>
+  <input id="answer" type="number" placeholder="Angle°" style="display:none; margin-top:10px;" min="0" max="360">
 
-<h1>Angle Recognition Quiz</h1>
-<canvas id="canvas" width="320" height="320"></canvas>
-<div id="output"></div>
-<button id="start" class="btn">Start</button>
-<input id="answer" type="number" placeholder="Angle°" style="display:none;">
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const menuDiv = document.getElementById('menu');
+    const btnDirected = document.getElementById('btnDirected');
+    const btnComplement = document.getElementById('btnComplement');
+    const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+    const questionText = document.getElementById('questionText');
+    const feedback = document.getElementById('feedback');
+    const output = document.getElementById('output');
+    const answerEl = document.getElementById('answer');
+    const restartBtn = document.getElementById('restart');
 
-<script>
-document.addEventListener('DOMContentLoaded',()=>{
-  const canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
-  const output=document.getElementById('output'), answerEl=document.getElementById('answer');
-  const startBtn=document.getElementById('start');
-  const remarkable=[0,90,180,270];
-  let questions=[], current, startTime, correctCount=0, total=20;
+    let exerciseType = null, questions = [], current = null;
+    let correctCount = 0, total = 0;
+    const remarkable = [0, 90, 180, 270, 360];
+    const randAngle5 = () => Math.floor(Math.random() * 72) * 5;
+    const getDirected = (a, b) => (b - a + 360) % 360;
+    const mistakes = [];
 
-  const log=msg=>{output.innerText+=msg+'\n';output.scrollTop=output.scrollHeight;};
+    function setupUI(type) {
+      exerciseType = type;
+      questions = [];
+      correctCount = 0;
+      mistakes.length = 0;
+      // hide panels
+      output.style.display = 'none'; feedback.style.display = 'none';
+      answerEl.style.display = 'none'; canvas.style.display = 'none'; questionText.style.display = 'none';
+      // show restart
+      restartBtn.style.display = 'inline-block';
 
-  const randAngle=()=>Math.floor(Math.random()*72)*5;
-  const getAngle=(a,b)=>Math.min(Math.abs(a-b),360-Math.abs(a-b));
-
-  function nextQuestion(){
-    if(!questions.length)return finishQuiz();
-    current=questions.pop();drawQuestion(current);
-    answerEl.value='';answerEl.style.display='inline-block';answerEl.focus();
-    startTime=performance.now();
-  }
-
-  function drawQuestion({a,b}){
-    const cx=160,cy=160,R=130;
-    ctx.clearRect(0,0,320,320);
-    ctx.strokeStyle='#ccc';ctx.beginPath();ctx.arc(cx,cy,R,0,2*Math.PI);ctx.stroke();
-    [a,b].forEach(angle=>{
-      const rad=angle*Math.PI/180;
-      ctx.strokeStyle='#0055aa';ctx.lineWidth=3;
-      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+R*Math.cos(rad),cy+R*Math.sin(rad));ctx.stroke();
-    });
-    const {start,span}=getArcParams(a,b);
-    ctx.strokeStyle='magenta';ctx.lineWidth=5;
-    ctx.beginPath();ctx.arc(cx,cy,R-15,start,start+span);ctx.stroke();
-  }
-
-  function drawCorrection({a,b,correct}){
-    const cx=160,cy=160,R=130,rArc=R-15;
-    const {start,span}=getArcParams(a,b);
-    ctx.clearRect(0,0,320,320);
-    ctx.strokeStyle='#ccc';ctx.beginPath();ctx.arc(cx,cy,R,0,2*Math.PI);ctx.stroke();
-    [a,b].forEach(angle=>{
-      const rad=angle*Math.PI/180;
-      ctx.strokeStyle='#0055aa';ctx.lineWidth=3;
-      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+R*Math.cos(rad),cy+R*Math.sin(rad));ctx.stroke();
-    });
-    let rem=remarkable.reduce((p,c)=>Math.abs(c-correct)<Math.abs(p-correct)?c:p);
-    let diff=correct-rem,remRad=rem*Math.PI/180,diffRad=diff*Math.PI/180;
-    ctx.strokeStyle='#1f77b4';ctx.lineWidth=8;
-    ctx.beginPath();ctx.arc(cx,cy,rArc,start,start+remRad);ctx.stroke();
-    ctx.strokeStyle='#aec7e8';
-    ctx.beginPath();ctx.arc(cx,cy,rArc,start+remRad,start+remRad+diffRad,diff<0);ctx.stroke();
-    ctx.fillStyle='#1f77b4';ctx.font='16px Arial';
-    const midRem=start+remRad/2;
-    ctx.fillText(rem+'°',cx+(rArc-25)*Math.cos(midRem)-10,cy+(rArc-25)*Math.sin(midRem)+5);
-    ctx.fillStyle='#1f77b4';
-    const midDiff=start+remRad+diffRad/2;
-    ctx.fillText((diff>=0?'+':'−')+Math.abs(diff)+'°',cx+(rArc-25)*Math.cos(midDiff)-15,cy+(rArc-25)*Math.sin(midDiff)+5);
-    ctx.fillStyle='black';ctx.font='20px Arial';
-    ctx.fillText('Angle: '+correct+'°',cx-45,cy+60);
-    log(`Angle: ${correct}° → ${rem}° ${diff>=0?'+':'−'} ${Math.abs(diff)}°`);
-  }
-
-  function getArcParams(a,b){
-    const aRad=a*Math.PI/180,bRad=b*Math.PI/180;
-    let delta=(bRad-aRad+2*Math.PI)%(2*Math.PI);
-    return delta<=Math.PI?{start:aRad,span:delta}:{start:bRad,span:2*Math.PI-delta};
-  }
-
-  function generateQuiz(){
-    questions=[];correctCount=0;
-    for(let i=0;i<total;i++){
-      const a=randAngle(),b=(a+randAngle()+10)%360;
-      questions.push({a,b,correct:getAngle(a,b)});
-    }
-    log("Quiz started!");
-    nextQuestion();
-  }
-
-  function finishQuiz(){
-    const score=`Your final score: ${correctCount}/${total}`;
-    log(score);
-    ctx.clearRect(0,0,320,320);
-    ctx.fillStyle='#4a90e2';ctx.font='20px Arial';
-    ctx.fillText(score,70,160);
-    answerEl.style.display='none';startBtn.disabled=false;
-  }
-
-  answerEl.oninput=()=>{
-    const val=answerEl.value.trim();
-    if(!val.match(/^\d+$/))return;
-    if(val.length===current.correct.toString().length){
-      const time=((performance.now()-startTime)/1000).toFixed(2);
-      if(Number(val)===current.correct){
-        log(`✅ Correct (${val}° in ${time}s)`);
-        correctCount++;
-      }else{
-        log(`❌ Wrong (${val}°). Correct: ${current.correct}°`);
+      if (type === 'directed') {
+        canvas.style.display = 'block'; total = 20;
+        output.style.display = 'block'; output.innerText = '';
+      } else {
+        questionText.style.display = 'block'; total = 30;
+        feedback.style.display = 'block'; feedback.innerText = '';
       }
-      drawCorrection(current);
-      setTimeout(nextQuestion,4000);
+      answerEl.style.display = 'inline-block'; answerEl.value = '';
+      menuDiv.style.display = 'none';
     }
-  };
 
-  startBtn.onclick=()=>{
-    output.innerText='';startBtn.disabled=true;generateQuiz();
-  };
+    function drawDirected(a, b) {
+      const cx = 160, cy = 160, R = 130;
+      ctx.clearRect(0, 0, 320, 320);
+      ctx.strokeStyle = '#ccc'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.stroke();
+      [a, b].forEach(angle => {
+        const rad = angle * Math.PI/180;
+        ctx.strokeStyle = '#0055aa'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + R * Math.cos(rad), cy + R * Math.sin(rad)); ctx.stroke();
+      });
+      const startRad = a * Math.PI/180, delta = getDirected(a, b);
+      ctx.strokeStyle = 'magenta'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(cx, cy, R - 15, startRad, startRad + delta * Math.PI/180); ctx.stroke();
+    }
 
-});
-</script>
+    function drawDirectedCorrection(a, b, correct) {
+      drawDirected(a, b);
+      const cx = 160, cy = 160, rArc = 115;
+      const startRad = a * Math.PI/180;
+      const rem = remarkable.reduce((p, c) => Math.abs(c - correct) < Math.abs(p - correct) ? c : p);
+      const diff = correct - rem;
+      const remRad = rem * Math.PI/180, diffRad = diff * Math.PI/180;
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#1f77b4'; ctx.beginPath(); ctx.arc(cx, cy, rArc, startRad, startRad + remRad); ctx.stroke();
+      ctx.strokeStyle = '#aec7e8'; ctx.beginPath(); ctx.arc(cx, cy, rArc, startRad + remRad, startRad + remRad + diffRad, diff < 0); ctx.stroke();
+      ctx.fillStyle = '#1f77b4'; ctx.font = '16px Arial';
+      const mid1 = startRad + remRad / 2;
+      ctx.fillText(rem + '°', cx + (rArc - 25) * Math.cos(mid1) - 10, cy + (rArc - 25) * Math.sin(mid1) + 5);
+      const mid2 = startRad + remRad + diffRad / 2;
+      ctx.fillText((diff >= 0 ? '+' : '−') + Math.abs(diff) + '°', cx + (rArc - 25) * Math.cos(mid2) - 15, cy + (rArc - 25) * Math.sin(mid2) + 5);
+      ctx.fillStyle = 'black'; ctx.font = '20px Arial';
+      ctx.fillText('Angle: ' + correct + '°', cx - 45, cy + 60);
+    }
 
+    function askNext() {
+      if (!questions.length) return finish();
+      current = questions.pop();
+      if (exerciseType === 'directed') {
+        drawDirected(current.a, current.b);
+      } else {
+        questionText.innerText = `Question ${total - questions.length}/${total}: complement of ${current.a}° = ?`;
+        feedback.innerText = '';
+      }
+      answerEl.value = '';
+      answerEl.focus();
+    }
+
+    function generate() {
+      for (let i = 0; i < total; i++) {
+        if (exerciseType === 'directed') {
+          const a = randAngle5(), b = randAngle5();
+          questions.push({a, b, correct: getDirected(a, b)});
+        } else {
+          const a = randAngle5();
+          questions.push({a, correct: (360 - a) % 360});
+        }
+      }
+      askNext();
+    }
+
+    function finish() {
+      if (exerciseType === 'directed') {
+        output.innerText += `Final score: ${correctCount}/${total}`;
+      } else {
+        output.style.display = 'block';
+        output.innerText = `Final score: ${correctCount}/${total}\n`;
+        if (mistakes.length) {
+          output.innerText += '\nErrors:\n';
+          mistakes.forEach(m => {
+            output.innerText += `Angle ${m.a}° → you: ${m.user}°, correct: ${m.correct}°\n`;
+          });
+        }
+      }
+      answerEl.style.display = 'none';
+      restartBtn.style.display = 'none';
+      menuDiv.style.display = 'block';
+    }
+
+    // Complement exercise input: 3s timeout
+    answerEl.oninput = () => {
+      if (exerciseType !== 'complement') return;
+      const valStr = answerEl.value.trim();
+      if (!/^\d*$/.test(valStr)) return;
+      const full = current.correct.toString().length;
+      if (valStr.length === full) {
+        const val = parseInt(valStr, 10);
+        if (val === current.correct) {
+          correctCount++;
+          feedback.innerText = `✅ Correct`;
+        } else {
+          feedback.innerText = `❌ Wrong, answer: ${current.correct}°`;
+          mistakes.push({a: current.a, user: val, correct: current.correct});
+        }
+        setTimeout(askNext, 3000);
+      }
+    };
+
+    // Directed exercise input: 4s timeout
+    answerEl.onkeyup = () => {
+      if (exerciseType !== 'directed') return;
+      const valStr = answerEl.value.trim();
+      if (!/^\d*$/.test(valStr)) return;
+      if (valStr.length !== current.correct.toString().length) return;
+      const val = parseInt(valStr, 10);
+      if (val === current.correct) {
+        correctCount++;
+        output.innerText += `✅ Correct: ${val}°\n`;
+      } else {
+        output.innerText += `❌ Wrong: ${val}°. Correct: ${current.correct}°\n`;
+      }
+      drawDirectedCorrection(current.a, current.b, current.correct);
+      setTimeout(askNext, 4000);
+    };
+
+    btnDirected.onclick = () => { setupUI('directed'); generate(); };
+    btnComplement.onclick = () => { setupUI('complement'); generate(); };
+    restartBtn.onclick = () => { finish(); };
+  });
+  </script>
 </body>
 </html>
